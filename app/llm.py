@@ -3,31 +3,63 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import JsonOutputParser
+from pydantic import BaseModel, Field 
+from enum import Enum
 
 load_dotenv()  # reads your .env file
 # The LLM — gpt-3.5-turbo is cheap for learning
 
 llm=ChatOpenAI(
-    model= "gpt-4o-mini",
+    model= "gpt-3.5-turbo",
+    #model = "gpt-4o-mini",
     temperature=0
 )
+
+#Define the schema
+class CategoryEnum(str, Enum):
+    billing="billing"
+    technical="technical"
+    general = "general"
+    
+class ComplaintClassification(BaseModel):
+    category:CategoryEnum
+    severity: str = Field(description = "loww/medium/high")
+    action: str = Field(description = "Suggested action")
+    
+
+#parser in json format
+parser = JsonOutputParser(pydantic_object=ComplaintClassification)
+
 # A reusable prompt with one variable -- this is a prompt template
 """prompt = PromptTemplate(
     input_variables= ["complaint"],
     template="You are a support classifier. Classify this complaint in one word (billing/technical/general):\n\n{complaint}"
 )"""
-#A reusable chat prompt template
+#A reusable chat prompt template, 
+"""Ex: In production, you want to separate system instructions from user input. This is how real LLM systems work:
+#System message — rules the AI must follow (stays the same)
+#User message — the actual input (changes every time)
+
+The LLM sees:
+System: [classifier rules]
+User: [the compl-turboint]
+Why does this matter?
+System messages have higher priority. The LLM respects them more reliably than rules buried in user text. Interview question: "How do you ensure the model follows instructions?" Answer: "System prompt."
+"""
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a support classifier. Classify complaints in one word: billing/technical/general"),
-    ("user", "Classify this: {complaint}")
+    ("system", "You are a support classifier. Return JSON with category, severity, and action."),
+    ("user", "Complaint: {complaint}\n\n{format_instructions}")
 ])
 
+
+prompt = prompt.partial(format_instructions=parser.get_format_instructions())
+
 # Parser — just returns clean string
-parser = StrOutputParser()
+#parser = StrOutputParser()
 
 # The chain — output of each feeds into next
 chain = prompt | llm | parser
-
 
 
 #Test it
@@ -38,18 +70,17 @@ if __name__ == "__main__":
     #complaint ="billing and technical and general all at once definitely not one word"
     try:
             result = chain.invoke({"complaint": complaint})
-            print(f"Raw LLM output: '{result}'")  # see what it actually returned
+            #print(f"Raw LLM output: '{result}'")  # see what it actually returned
             # Validate the result
             valid_categories = ["billing", "technical", "general"]
-            if result.lower() not in valid_categories:
-                print(f"Invalid category, using fallback")
-                result = "general"  # fallback
+            if result["category"].lower() not in valid_categories:
+                result["category"] = "general"  # fallback
+            print(result)
     except Exception as e:
             print(f"Error: {e}")
-            result = "general"  # fallback on any failure
+            #result = "general"  # fallback on any failure
         
-    
-    print(f"Final result: '{result}'")
+   # print(f"Final result: '{result}'")
     
 
 """formatted = prompt.format(complaint = complaint)
