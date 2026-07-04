@@ -1,16 +1,37 @@
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
 
 load_dotenv()
 
-# Add this to see raw LLM output
-llm_raw = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(model_name =" gpt-3-5-turbo", temperature=0.0, max_tokens = 1000)
 
-complaint = "My invoice shows the wrong amount"
-result_raw = llm_raw.invoke([
-    {"role": "system", "content": "Return only valid JSON with category, severity, action"},
-    {"role": "user", "content": f"Classify: {complaint}"}
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful support assisstant"),
+    MessagesPlaceholder(variable_name = "history"),
+    ("human", "{input}")
 ])
-print("Raw LLM output:")
-print(result_raw.content)
+
+chain = prompt | llm | StrOutputParser()
+
+if __name__ == "__main__":
+    history = []
+    
+    while True:
+        user_input = input("You:")
+        if user_input.lower() in ["exit", "quit"]:
+            break
+        
+        response = chain.invoke({
+            "input": user_input,
+            "history": history
+        })
+        
+        history.append(HumanMessage(content=user_input))
+        history.append(AIMessage(content=response))
+        history = history [-4: ] # Keep only the last 4 messages in history
+        
+        print(f"Bot: {response}\n")
+
