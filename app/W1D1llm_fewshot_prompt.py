@@ -1,9 +1,10 @@
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.output_parsers import JsonOutputParser
+
 from pydantic import BaseModel, Field 
 from enum import Enum
 
@@ -53,7 +54,8 @@ Why does this matter?
 System messages have higher priority. The LLM respects them more reliably than rules buried in user text. Interview question: "How do you ensure the model follows instructions?" Answer: "System prompt."
 """
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a support classifier. Classify into category, severity, and action. Severity must reflect urgency: security threats and hacks are always HIGH."),
+    ("system", "You are a support classifier. Classify into category, severity, and action. Severity must reflect urgency: security threats are always HIGH."),
+    MessagesPlaceholder(variable_name="history"),
     ("user", "Classify this complaint: {complaint}\n\n{format_instructions}")
 ])
 
