@@ -4,3 +4,7 @@ python-dotenv
 langchain-community
 fastapi 
 uvicorn
+pypdf
+chromadb
+langchain-chroma
+tiktoken
