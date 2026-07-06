@@ -18,12 +18,12 @@ prompt = ChatPromptTemplate.from_messages([
 
 chain = prompt | llm | StrOutputParser()
 
-def answer_question(query:str)->dict:
-    vectorstore=load_vectorstore()
+def answer_question(query: str) -> dict:
+    vectorstore = load_vectorstore()
     docs = vectorstore.similarity_search(query, k=2)
     
     context = "\n\n".join([
-        f"[Page {doc.metadata['page']}]:{doc.page_content}" 
+        f"[Page {doc.metadata['page']+1}]: {doc.page_content}" 
         for doc in docs
     ])
     
@@ -32,12 +32,22 @@ def answer_question(query:str)->dict:
         "question": query
     })
     
+    # Fallback detection
+    if "don't have that information" in answer.lower():
+        return {
+            "question": query,
+            "answer": answer,
+            "sources": [],
+            "in_scope": False
+        }
+    
     return {
         "question": query,
         "answer": answer,
-        "sources": [doc.metadata['page']+1 for doc in docs]
+        "sources": [doc.metadata['page']+1 for doc in docs],
+        "in_scope": True
     }
 
 if __name__ == "__main__":
-    result = answer_question("How many annual leave days do employees get?")
+    result = answer_question("what is the company's revenue?")
     print(result)
