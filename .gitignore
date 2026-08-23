@@ -4,3 +4,8 @@ __pycache__/
 documents_notes/
 app/test.py
 chroma_db/
+
+
+
+*.pyc
+.DS_Store
