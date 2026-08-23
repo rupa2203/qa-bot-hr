@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>HR Policy Bot</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+    #question { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; }
+    button { margin-top: 10px; padding: 10px 24px; font-size: 16px; cursor: pointer; }
+    #answer { margin-top: 24px; padding: 16px; background: #f0f4ff; border-radius: 6px; display: none; }
+    #sources { color: #666; font-size: 14px; margin-top: 8px; }
+    #error { color: red; margin-top: 10px; display: none; }
+    #loading { display: none; color: #888; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>HR Policy Assistant</h2>
+
+  <input id="question" type="text" placeholder="Ask a question about HR policy..." />
+  <button onclick="askQuestion()">Ask</button>
+
+  <div id="loading">Thinking...</div>
+  <div id="error"></div>
+
+  <div id="answer">
+    <strong>Answer:</strong>
+    <p id="answer-text"></p>
+    <div id="sources"></div>
+  </div>
+
+  <script>
+    async function askQuestion() {
+      const question = document.getElementById("question").value.trim();
+
+      // Basic validation
+      if (!question) {
+        showError("Please enter a question.");
+        return;
+      }
+
+      // Reset UI
+      document.getElementById("answer").style.display = "none";
+      document.getElementById("error").style.display = "none";
+      document.getElementById("loading").style.display = "block";
+
+      try {
+        // fetch() — sends JSON POST, no page reload
+        const response = await fetch("http://localhost:8000/hr/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: question })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Inject answer into DOM
+        document.getElementById("answer-text").innerText = data.answer;
+        document.getElementById("sources").innerText = data.in_scope
+          ? `Source pages: ${data.sources.join(", ")}`
+          : "";
+        document.getElementById("answer").style.display = "block";
+
+      } catch (err) {
+        showError(`Error: ${err.message}`);
+      } finally {
+        document.getElementById("loading").style.display = "none";
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("error");
+      el.innerText = msg;
+      el.style.display = "block";
+    }
+
+    // Allow pressing Enter to submit
+    document.getElementById("question").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") askQuestion();
+    });
+  </script>
+</body>
+</html>

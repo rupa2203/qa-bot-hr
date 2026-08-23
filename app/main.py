@@ -20,13 +20,30 @@ command to rn the fastapi : uvicorn app.main:app --reload
     """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from app.llm_fewshot_prompt import chain
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from app.rag import answer_question
 
+
 app=FastAPI()
 # Store per-session history
+
+# CORS — allows browser JS to call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],    # dev only — lock down in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve HTML frontend at /static/index.html
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+#----------Week 1 work — complaint classifier with memory--------------------#
+
 sessions={}
 
 class CompliantRequst(BaseModel):
@@ -63,10 +80,18 @@ def classify(request: CompliantRequst):
     except Exception as e:
             return {"error": str(e)}    
 
+#======================(Week 2 work — HR RAG bot) =======================#
+hr_sessions = {}  # separate from classify sessions
 
 class HRRequest(BaseModel):
     question: str
+    session_id: str = "default"  # optional — defaults to single session
 
 @app.post("/hr/ask")
 def ask_hr(request: HRRequest):
+    if(request.session_id not in hr_sessions):
+        hr_sessions[request.session_id]=[]
+    history = hr_sessions[request.session_id]
+    # Get or create history for this session
     return answer_question(request.question)
+

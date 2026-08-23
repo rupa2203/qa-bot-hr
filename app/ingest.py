@@ -6,7 +6,7 @@ def load_and_chunks(pdf_path: str):
     documents = loader.load()
     
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
+        chunk_size=200,
         chunk_overlap=50
     )
     
@@ -24,5 +24,7 @@ if __name__ == "__main__":
             break
         print(f"Chunk {i+1}: {chunks[i].page_content}")
         print(f"Metadata: {chunks[i].metadata}")
+                
+        
     
     
