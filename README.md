@@ -63,13 +63,19 @@ qa-bot-hr/
 │   │                               - Fallback detection (in_scope)
 │   │                               - Source page citation
 │   │
-│   ├── ingest.py                 ← PDF loader
-│   │                               - PyPDFLoader
+│   ├── ingest.py                 ← PDF/TXT loader
+│   │                               - PyPDFLoader / TextLoader
 │   │                               - RecursiveCharacterTextSplitter
 │   │                               - chunk_size=200, overlap=50
+│   │                               - load_and_chunk_file() — single file
+│   │                               - load_and_chunk_folder() — whole folder
 │   │
 │   ├── vectorstore.py            ← ChromaDB
-│   │                               - build_vectorstore()
+│   │                               - build_vectorstore() / _from_folder()
+│   │                               - sync_vectorstore_from_folder() —
+│   │                                 incremental add/update/remove by
+│   │                                 content hash, no full rebuild needed
+│   │                                 (see "Updating documents" below)
 │   │                               - load_vectorstore()
 │   │                               - retrieve()
 │   │                               - print_embeddings()
@@ -77,6 +83,9 @@ qa-bot-hr/
 │   ├── main.py                   ← FastAPI app
 │   │                               - POST /classify (complaint bot)
 │   │                               - POST /hr/ask (HR RAG bot)
+│   │                               - POST /hr/retrieve (retrieval only,
+│   │                                 no LLM call — for eval tooling)
+│   │                               - POST /feedback (thumbs up/down log)
 │   │                               - Session memory (sessions dict)
 │   │                               - CORS middleware
 │   │                               - Static HTML frontend
@@ -100,9 +109,15 @@ qa-bot-hr/
 │   └── results.json              ← 16/16 PASS, Score 100%
 │
 ├── documents/
-│   └── hr_policy.pdf             ← source document in ChromaDB
+│   └── *.pdf / *.txt             ← source documents embedded into ChromaDB
 │
-├── chroma_db/                    ← vector embeddings stored here
+├── ingest_manifest.json          ← filename → content-hash map used by
+│                                    sync_vectorstore_from_folder() to know
+│                                    what's already embedded
+│
+├── chroma_db/                    ← vector embeddings (gitignored — not
+│                                    committed; regenerate locally, see
+│                                    "Updating documents" below)
 │
 ├── tests/                        ← empty — Week 2 pytest goes here
 ├── workflows/                    ← empty — Week 9 CI/CD goes here
@@ -123,14 +138,26 @@ pip install -r requirements.txt
 cp .env.example .env
 # edit .env and add OPENAI_API_KEY=your_key
 
-# 3. Build vector store
-python -m app.vectorstore
+# 3. Build vector store (first time only — embeds everything in documents/)
+python -m app.vectorstore sync documents
 
 # 4. Run the API
 uvicorn app.main:app --reload
 
 # 5. Run eval suite
 python -m evals.run_evals
+
+## Updating documents
+Drop a new file into documents/, or edit an existing one, then re-run:
+    python -m app.vectorstore sync documents
+This is incremental — it only embeds what's new or changed (by content
+hash, tracked in ingest_manifest.json). A brand-new file gets embedded and
+added; an edited file has just its own old chunks deleted and replaced;
+an unchanged file is skipped entirely (no re-embedding, no API cost); a
+file removed from documents/ has its chunks deleted too. No full
+chroma_db wipe/rebuild needed for routine document changes — that's only
+ever required if the store itself gets corrupted or you want to start over,
+via build_vectorstore_from_folder().
 
 ## Eval report
 Q1:  How many annual leave days...  → PASS (confidence: high)
@@ -164,5 +191,12 @@ API docs: http://localhost:8000/docs
 
 ## Endpoints
 - `POST /classify` — classifies complaint into category, severity, action
-
+- `POST /hr/ask` — HR policy RAG chatbot; answers a question using retrieved
+  chunks, returns `answer`, `chunks`, `sources`, `latency_ms`, `model`
+- `POST /hr/retrieve` — retrieval only, no LLM call; returns the top-k
+  chunks + scores for a query. Used by eval tooling to grade retrieval
+  quality in isolation, without generation cost.
+- `POST /feedback` — records a real user's thumbs up/down on an `/hr/ask`
+  answer into a feedback log (path configurable via
+  `QAEVAL_FEEDBACK_LOG_PATH`)
 

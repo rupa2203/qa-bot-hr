@@ -10,6 +10,11 @@
     #sources { color: #666; font-size: 14px; margin-top: 8px; }
     #error { color: red; margin-top: 10px; display: none; }
     #loading { display: none; color: #888; margin-top: 10px; }
+    #feedback { margin-top: 12px; }
+    #feedback button { font-size: 18px; padding: 4px 10px; margin-right: 8px; background: none; border: 1px solid #ccc; border-radius: 4px; }
+    #feedback button.voted { background: #d6e4ff; border-color: #6366f1; }
+    #feedback button:disabled { cursor: default; opacity: 0.6; }
+    #feedback-thanks { color: #16a34a; font-size: 13px; margin-left: 4px; display: none; }
   </style>
 </head>
 <body>
@@ -25,9 +30,22 @@
     <strong>Answer:</strong>
     <p id="answer-text"></p>
     <div id="sources"></div>
+    <div id="feedback">
+      Was this helpful?
+      <button id="thumb-up" onclick="sendFeedback('up')">👍</button>
+      <button id="thumb-down" onclick="sendFeedback('down')">👎</button>
+      <span id="feedback-thanks">Thanks for the feedback!</span>
+    </div>
   </div>
 
   <script>
+    // Same-origin relative paths — the API and this static file are served
+    // by the same FastAPI process, so this works on whatever port you run
+    // uvicorn on instead of assuming a hardcoded one.
+    let lastQuestion = "";
+    let lastAnswer = "";
+    let lastChunks = null;
+
     async function askQuestion() {
       const question = document.getElementById("question").value.trim();
 
@@ -41,10 +59,11 @@
       document.getElementById("answer").style.display = "none";
       document.getElementById("error").style.display = "none";
       document.getElementById("loading").style.display = "block";
+      resetFeedbackUI();
 
       try {
         // fetch() — sends JSON POST, no page reload
-        const response = await fetch("http://localhost:8000/hr/ask", {
+        const response = await fetch("/hr/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ question: question })
@@ -63,10 +82,44 @@
           : "";
         document.getElementById("answer").style.display = "block";
 
+        lastQuestion = question;
+        lastAnswer = data.answer;
+        lastChunks = data.chunks ?? null;
+
       } catch (err) {
         showError(`Error: ${err.message}`);
       } finally {
         document.getElementById("loading").style.display = "none";
+      }
+    }
+
+    function resetFeedbackUI() {
+      document.getElementById("thumb-up").disabled = false;
+      document.getElementById("thumb-down").disabled = false;
+      document.getElementById("thumb-up").classList.remove("voted");
+      document.getElementById("thumb-down").classList.remove("voted");
+      document.getElementById("feedback-thanks").style.display = "none";
+    }
+
+    async function sendFeedback(rating) {
+      document.getElementById("thumb-up").disabled = true;
+      document.getElementById("thumb-down").disabled = true;
+      document.getElementById(rating === "up" ? "thumb-up" : "thumb-down").classList.add("voted");
+
+      try {
+        await fetch("/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: lastQuestion,
+            answer: lastAnswer,
+            rating: rating,
+            sourceChunks: lastChunks,
+          })
+        });
+        document.getElementById("feedback-thanks").style.display = "inline";
+      } catch (err) {
+        showError(`Feedback error: ${err.message}`);
       }
     }
 
